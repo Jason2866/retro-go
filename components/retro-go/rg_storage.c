@@ -154,23 +154,28 @@ void rg_storage_init(void)
     #warning "USB OTG isn't available on your SOC"
     error_code = -1;
 
-#elif RG_STORAGE_DRIVER == 4 // SPI Flash
-
-    esp_vfs_fat_mount_config_t mount_config = {
-        .format_if_mount_failed = true, // if mount failed, it's probably because it's a clean install so the partition hasn't been formatted yet
-        .max_files = 16, // must be initialized, otherwise it will use an uninitialized ("random") value, which can trigger ESP_ERR_NO_MEM if it's a big one
-        .allocation_unit_size = 0 // "Setting this field to 0 will result in allocation unit set to the sector size." - in other words: the default value, which is fine
-    };
-
-    wl_handle_t s_wl_handle = WL_INVALID_HANDLE;
-    esp_err_t err = esp_vfs_fat_spiflash_mount(RG_STORAGE_ROOT, "storage", &mount_config, &s_wl_handle);
-    error_code = (int)err;
-
 #else // Host (stdlib)
 
     // Maybe we should just check if RG_STORAGE_ROOT exists?
     error_code = 0;
 
+#endif
+
+#ifdef ESP_PLATFORM
+    // If the SD Card failed to mount (or there isn't one), we can try flash because why not?
+    if (error_code != 0)
+    {
+        RG_LOGI("Looking for a flash storage partition...");
+        esp_vfs_fat_mount_config_t mount_config = {
+            .format_if_mount_failed = true, // if mount failed, it's probably because it's a clean install so the partition hasn't been formatted yet
+            .max_files = 4, // must be initialized, otherwise it will use an uninitialized ("random") value, which can trigger ESP_ERR_NO_MEM if it's a big one
+            .allocation_unit_size = 0 // "Setting this field to 0 will result in allocation unit set to the sector size." - in other words: the default value, which is fine
+        };
+
+        wl_handle_t s_wl_handle = WL_INVALID_HANDLE;
+        esp_err_t err = esp_vfs_fat_spiflash_mount(RG_STORAGE_ROOT, "storage", &mount_config, &s_wl_handle);
+        error_code = (int)err;
+    }
 #endif
 
     disk_mounted = !error_code;
